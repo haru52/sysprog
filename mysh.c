@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <fcntl.h>
 
 #define SIZE 80
 #define BUFSIZE 256
@@ -33,109 +34,147 @@ void getargs(char *cp, int *argc, char *argv[])
 }
 
 
-void printArgv(int argc, char *argv[])
+void printargs(int argc, char *argv[])
 {
   int i;
-  for (i = 0; i < argc; i++) {
+  printf("argc: %d\n", argc);
+  for (i = 0; i <= argc; i++) {
     printf("argv[%d]: %s\n", i, argv[i]);
   }
 }
 
 
-int countPipe(int argc, char *argv[])
+int count_pipe(int argc, char *argv[])
 {
   int i;
-  int pipeNum;
+  int pipe_num;
 
-  for (i = 0, pipeNum = 0; i < argc; i++) {
+  for (i = 0, pipe_num = 0; i < argc; i++) {
     if (strcmp(argv[i], "|") == 0) {
-      pipeNum++;
+      pipe_num++;
     }
   }
 
-  return pipeNum;
+  return pipe_num;
 }
 
 
 // パイプ時に分割
-// void splitProc(int procID, int *pargc, char *pargv[], int *ac, char *av[])
-// {
-// 	*pargc = 0;
-// 	int argv_i, pargv_i;
+void split_proc(int proc_id, int pipe_num, int argc, char *argv[], int *pargc, char *pargv[])
+{
+	*pargc = 0;
+	int argv_i, pargv_i;
+  int passed_pipe_num = 0;
 
-//   if (procID == 1) {
+  if (proc_id == 1) {
+    for (argv_i = 0, pargv_i = 0; argv_i < argc; argv_i++, pargv_i++) {
+      if (strcmp(argv[argv_i], "|") == 0) {
+        break;
+      }
+      pargv[pargv_i] = argv[argv_i];
+      *pargc += 1;
+    }
+  } else if (proc_id == (pipe_num + 1)) {
+    for (argv_i = 0; passed_pipe_num < (proc_id - 1); argv_i++) {
+      if (strcmp(argv[argv_i], "|") == 0) {
+        passed_pipe_num++;
+      }
+    }
+    for (pargv_i = 0; argv_i < argc; argv_i++, pargv_i++) {
+      pargv[pargv_i] = argv[argv_i];
+      *pargc += 1;
+    }
+  } else {
+    for (argv_i = 0; passed_pipe_num < (proc_id - 1); argv_i++) {
+      if (strcmp(argv[argv_i], "|") == 0) {
+        passed_pipe_num++;
+      }
+    }
+    for (pargv_i = 0; argv_i < argc; argv_i++, pargv_i++) {
+      if (strcmp(argv[argv_i], "|") == 0) {
+        break;
+      }
+      pargv[pargv_i] = argv[argv_i];
+      *pargc += 1;
+    }
+  }
+  pargv[pargv_i] = NULL;
+}
 
-//   } else {
-
-//   }
-
-//   for (argv_i = 0; argv_i < *ac; i++) {
-//     if (strcmp(av[i], "|") == 0) {
-//       i++;
-//       break;
-//     }
-//     pargv[i] = 
-//   }
-
-// 	for (i = 0; j < *ac; i++, j++) {
-// 		if (!(strcmp(av[j], "|"))) {
-// 			j++;
-// 			break;
-// 		} else {
-// 			pargv[i] = av[j];
-// 			*pargc = *pargc + 1;
-// 		}
-// 	}
-// }
+void redirect(int pargc, char *pargs[])
+{
+  int i;
+  int fd;
+  for (i = 0; i < pargc; i++) {
+    if (strcmp(pargs[i], ">")) {
+      fd = open(pargs[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+      close(1);
+      dup(fd);
+      close(fd);
+    }
+    if (strcmp(pargs[i], "<")) {
+      fd = open(pargs[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+      close(0);
+      dup(fd);
+      close(fd);
+    }
+  }    
+}
 
 int main(void)
 {
   int argc;
   char *argv[SIZE];
-  int pipeNum;
+  int pipe_num;
   int i;
-  int *pargc;
+  int pargc;
   char *pargv[SIZE];
   int pid;
   int status;
+  int proc_id;
   
   while(1) {
     printf("mysh$ ");
 
-    char cp[BUFSIZE] = {0};
+    char cp[BUFSIZE];
+    memset(cp, 0, sizeof(cp));
 
     if (fgets(cp, BUFSIZE, stdin) == NULL) {
-      fprintf(stderr, "input error\n");
+      perror("fgets");
       exit(1);
     }
 
     getargs(cp, &argc, argv);
-    
-    if (strcmp(argv[0], "exit") == 0) {
-      printf("EXIT!\n");
+
+    if (strcmp(argv[0], "cd") == 0) {
+      if (argc == 1) {
+        chdir(getenv("HOME"));
+      } else {
+        chdir(argv[1]);
+      }
+    } else if (strcmp(argv[0], "exit") == 0) {
       exit(0);
     }
-    // pipeNum = countPipe(*argc, argv);
+    pipe_num = count_pipe(argc, argv);
+    // printf("pipe_num: %d\n", pipe_num);
     
-    // for (i = 0; i < pipeNum; i++) {
-    //   splitProc(pargc, pargv, argc, argv);
-      
-      argv[argc] = NULL;
-      // execvp(argv[0], argv);
+    for (proc_id = 1; proc_id <= pipe_num  + 1; proc_id++) {
+      split_proc(proc_id, pipe_num, argc, argv, &pargc, pargv);
+      // printf("proc_id: %d\n", proc_id);
+      // printargs(pargc, pargv);
 
-      printArgv(argc + 1, argv);
       if ((pid = fork()) < 0) {
         /* エラー処理 */
         perror("fork");
       } else if (pid == 0) {
         /* 子プロセスの処理 */
-        execvp(argv[0], argv);
+        // redirect(pargc, pargv);
+        execvp(pargv[0], pargv);
       } else {
         /* 親プロセスの処理 */
-        printf("親プロセス\n");
         wait(&status);
       }
-    // }
+    }
   }
   
   return 0;
