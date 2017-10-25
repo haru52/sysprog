@@ -37,9 +37,10 @@ void getargs(char *cp, int *argc, char *argv[])
 void printargs(int argc, char *argv[])
 {
   int i;
-  printf("argc: %d\n", argc);
-  for (i = 0; i <= argc; i++) {
-    printf("argv[%d]: %s\n", i, argv[i]);
+
+  // fprintf(stderr, "argc: %d\n", argc);
+  for (i = 0; i < argc; i++) {
+    fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
   }
 }
 
@@ -101,24 +102,28 @@ void split_proc(int proc_id, int pipe_num, int argc, char *argv[], int *pargc, c
   pargv[pargv_i] = NULL;
 }
 
-void redirect(int pargc, char *pargs[])
+void redirect(int pargc, char *pargv[])
 {
   int i;
   int fd;
+
   for (i = 0; i < pargc; i++) {
-    if (strcmp(pargs[i], ">")) {
-      fd = open(pargs[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
-      close(1);
-      dup(fd);
-      close(fd);
-    }
-    if (strcmp(pargs[i], "<")) {
-      fd = open(pargs[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+    if (strcmp(pargv[i], "<") == 0) {
+      fd = open(pargv[i + 1], O_RDONLY);
       close(0);
       dup(fd);
       close(fd);
+      pargv[i] = NULL;
+      i++;
+    } else if (strcmp(pargv[i], ">") == 0) {
+      fd = open(pargv[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0644);
+      close(1);
+      dup(fd);
+      close(fd);
+      pargv[i] = NULL;
+      i++;
     }
-  }    
+  }
 }
 
 int main(void)
@@ -168,7 +173,9 @@ int main(void)
         perror("fork");
       } else if (pid == 0) {
         /* 子プロセスの処理 */
-        // redirect(pargc, pargv);
+        int fd;
+        int i;
+        redirect(pargc, pargv);
         execvp(pargv[0], pargv);
       } else {
         /* 親プロセスの処理 */
