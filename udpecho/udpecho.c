@@ -20,7 +20,7 @@ int main(int argc, char *argv[])
 {
     int s, count, datalen;
     struct sockaddr_in skt;
-    char sbuf[512];
+    char buf[512];
     in_port_t port;
     struct in_addr ipaddr;
     socklen_t sktlen;
@@ -37,9 +37,9 @@ int main(int argc, char *argv[])
 
     do {
         printf("Input message: ");
-        fgets(sbuf, sizeof sbuf, stdin);
-        sbuf[strlen(sbuf) - 1] = '\0';
-        datalen = sizeof(char) * (strlen(sbuf) + 1);
+        fgets(buf, sizeof buf, stdin);
+        buf[strlen(buf) - 1] = '\0';
+        datalen = sizeof(char) * (strlen(buf) + 1);
         inet_aton(argv[1], &ipaddr);
         port = PORT_NUM;
         memset(&skt, 0, sizeof skt);
@@ -47,18 +47,18 @@ int main(int argc, char *argv[])
         skt.sin_addr.s_addr = ipaddr.s_addr;
 
         sktlen = sizeof skt;
-        if ((count = sendto(s, sbuf, datalen, 0, (struct sockaddr *)&skt, sizeof skt)) < 0) {
+        if ((count = sendto(s, buf, datalen, 0, (struct sockaddr *)&skt, sizeof skt)) < 0) {
             perror("sendto");
             exit(1);
         }
 
-        if ((count = recvfrom(s, sbuf, sizeof sbuf, 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
+        if ((count = recvfrom(s, buf, sizeof buf, 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
             perror("recvfrom");
             exit(1);
         }
 
-        printf("%s\n", sbuf);
-    } while(strcmp(sbuf, "FIN") != 0);
+        printf("%s\n", buf);
+    } while(strcmp(buf, "FIN") != 0);
 
     close(s);
 

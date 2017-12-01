@@ -23,7 +23,6 @@ int main(void)
     in_port_t myport;
     struct sockaddr_in myskt;
     struct sockaddr_in skt;
-    struct in_addr ipaddr;
     char buf[512];
     socklen_t sktlen;
 
@@ -31,7 +30,6 @@ int main(void)
         perror("socket");
         exit(1);
     }
-    inet_aton(IP_ADDR, &ipaddr);
     myport = PORT_NUM;
     memset(&myskt, 0, sizeof myskt);
     myskt.sin_port = htons(myport);
