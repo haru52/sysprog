@@ -6,7 +6,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#define IP_ADDR "127.0.0.1"
 #define PORT_NUM 8888
 
 int main(void)
