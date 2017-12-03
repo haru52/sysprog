@@ -12,10 +12,10 @@
 int main(int argc, char *argv[])
 {
     int s, count, datalen;
-    struct sockaddr_in skt;
-    char buf[512];
-    in_port_t port;
-    struct in_addr ipaddr;
+    struct sockaddr_in skt; // 受信側ソケット
+    char buf[512];          // 送信用バッファ
+    in_port_t port;         // 受信側のポート番号
+    struct in_addr ipaddr;  // 送信側のIPアドレス
     socklen_t sktlen;
 
     if (argc != 2) {
@@ -33,14 +33,15 @@ int main(int argc, char *argv[])
         fgets(buf, sizeof buf, stdin);
         buf[strlen(buf) - 1] = '\0';
         datalen = sizeof(char) * (strlen(buf) + 1);
-        inet_aton(argv[1], &ipaddr);
         port = PORT_NUM;
+        inet_aton(argv[1], &ipaddr);
+
         memset(&skt, 0, sizeof skt);
+        skt.sin_family = AF_INET;
         skt.sin_port = htons(port);
         skt.sin_addr.s_addr = ipaddr.s_addr;
-
         sktlen = sizeof skt;
-        if ((count = sendto(s, buf, datalen, 0, (struct sockaddr *)&skt, sizeof skt)) < 0) {
+        if ((count = sendto(s, buf, datalen, 0, (struct sockaddr *)&skt, sktlen)) < 0) {
             perror("sendto");
             exit(1);
         }
