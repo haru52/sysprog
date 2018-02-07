@@ -15,28 +15,28 @@
 
 int main(int argc, char *argv[])
 {
-    int s;
-    int count, datalen;
+    int s, count, datalen;
     struct sockaddr_in myskt;
     struct sockaddr_in skt;
     char buf[BUF_SIZE];
     char sbuf[BUF_SIZE];
+    socklen_t sktlen;
     in_port_t port;
     struct in_addr ipaddr;
     fd_set rdfds;
 
     if (argc != 2) {
-      fprintf(stderr, "Usage: ./chat [Destination IP address]\n");
-      exit(1);
+        fprintf(stderr, "Usage: ./chat [Destination IP address]\n");
+        exit(1);
     }
-    printf("Chat start!\n");
+    printf("Chat start!\nInput \"FIN\" if you want to close this chat.\n\n");
 
     if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-      perror("socket");
-      exit(1);
+        perror("socket");
+        exit(1);
     }
     port = PORT_NUM;
-    memset(&myskt, 0, sizeof myskt);
+    memset(&myskt, 0, sizeof(myskt));
     myskt.sin_family = AF_INET;
     myskt.sin_port = htons(port);
     myskt.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -55,7 +55,6 @@ int main(int argc, char *argv[])
         }
 
         if (FD_ISSET(0, &rdfds)) {
-            memset(sbuf, 0, sizeof(sbuf));
             fgets(sbuf, sizeof(sbuf), stdin);
             sbuf[strlen(sbuf) - 1] = '\0';
             datalen = sizeof(char) * (strlen(sbuf) + 1);
@@ -73,8 +72,7 @@ int main(int argc, char *argv[])
         }
 
         if (FD_ISSET(s, &rdfds)) {
-            memset(buf, 0, sizeof(buf));
-            socklen_t sktlen = sizeof(skt);
+            sktlen = sizeof(skt);
             if ((count = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
                 perror("recvfrom");
                 exit(1);
@@ -86,6 +84,6 @@ int main(int argc, char *argv[])
         }
     }
     close(s);
-    printf("Chat close!\n");
+    printf("\nChat close!\n");
     return 0;
 }
