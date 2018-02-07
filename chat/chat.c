@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -12,6 +13,7 @@
 
 #define BUF_SIZE 512
 #define PORT_NUM 49155
+#define SERV_SIZE 6
 
 int main(int argc, char *argv[])
 {
@@ -21,12 +23,16 @@ int main(int argc, char *argv[])
     char buf[BUF_SIZE];
     char sbuf[BUF_SIZE];
     socklen_t sktlen;
-    in_port_t port;
+    in_port_t myport;
     struct in_addr ipaddr;
+    struct addrinfo hints, *res;
+    char *host;
+    char serv[SERV_SIZE];
+    int err;
     fd_set rdfds;
 
     if (argc != 2) {
-        fprintf(stderr, "Usage: ./chat [Destination IP address]\n");
+        fprintf(stderr, "Usage: ./chat [Destination hostname]\n");
         exit(1);
     }
     printf("Chat start!\nInput \"FIN\" if you want to close this chat.\n\n");
@@ -35,13 +41,23 @@ int main(int argc, char *argv[])
         perror("socket");
         exit(1);
     }
-    port = PORT_NUM;
+    myport = PORT_NUM;
     memset(&myskt, 0, sizeof(myskt));
     myskt.sin_family = AF_INET;
-    myskt.sin_port = htons(port);
+    myskt.sin_port = htons(myport);
     myskt.sin_addr.s_addr = htonl(INADDR_ANY);
     if (bind(s, (struct sockaddr *)&myskt, sizeof(myskt)) < 0) {
         perror("bind");
+        exit(1);
+    }
+    sktlen = sizeof(skt);
+
+    host = argv[1];
+    snprintf(serv, SERV_SIZE, "%d", PORT_NUM);
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_socktype = SOCK_DGRAM;
+    if ((err = getaddrinfo(host, serv, &hints, &res)) < 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(err));
         exit(1);
     }
 
@@ -58,11 +74,7 @@ int main(int argc, char *argv[])
             fgets(sbuf, sizeof(sbuf), stdin);
             sbuf[strlen(sbuf) - 1] = '\0';
             datalen = sizeof(char) * (strlen(sbuf) + 1);
-            inet_aton(argv[1], &ipaddr);
-            skt.sin_family = AF_INET;
-            skt.sin_port = htons(port);
-            skt.sin_addr.s_addr = ipaddr.s_addr;
-            if ((count = sendto(s, sbuf, datalen, 0, (struct sockaddr *)&skt, sizeof(skt))) < 0) {
+            if ((count = sendto(s, sbuf, datalen, 0, res->ai_addr, res->ai_addrlen)) < 0) {
                 perror("sendto");
                 exit(1);
             }
@@ -72,17 +84,17 @@ int main(int argc, char *argv[])
         }
 
         if (FD_ISSET(s, &rdfds)) {
-            sktlen = sizeof(skt);
             if ((count = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
                 perror("recvfrom");
                 exit(1);
             }
-            printf("%s: %s\n", inet_ntoa(skt.sin_addr), buf);
+            printf("%s: %s\n", host, buf);
             if (strcmp(buf, "FIN") == 0) {
                 break;
             }
         }
     }
+    freeaddrinfo(res);
     close(s);
     printf("\nChat close!\n");
     return 0;
