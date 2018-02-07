@@ -1,27 +1,37 @@
 // chat.c
-// UDP，select()を用いたチャットプログラム
+// UDP chat program with select()
 
 #include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
+#include <stdlib.h>
+#include <string.h>
+#include <arpa/inet.h>
 #include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #define BUF_SIZE 512
 #define PORT_NUM 49155
 
-int main(void)
+int main(int argc, char *argv[])
 {
-    int s;                    // ソケット記述子
+    int s;
     int count, datalen;
-    struct sockaddr_in myskt; // 受信用ソケットアドレス構造体
-    struct sockaddr_in skt;   // 送信用ソケットアドレス構造体
-    char buf[BUF_SIZE];       // 受信用バッファ
-    char sbuf[BUF_SIZE];      // 送信用バッファ
-    in_port_t port;           // ポート番号
-    struct in_addr ipaddr;    // 送信用IPアドレス
+    struct sockaddr_in myskt;
+    struct sockaddr_in skt;
+    char buf[BUF_SIZE];
+    char sbuf[BUF_SIZE];
+    in_port_t port;
+    struct in_addr ipaddr;
     fd_set rdfds;
 
-    if ((s = socket(AF_INET, SOCK_DGRAM, 0) < 0) {
+    if (argc != 2) {
+      fprintf(stderr, "Usage: ./chat [Destination IP address]\n");
+      exit(1);
+    }
+    printf("Chat start!\n");
+
+    if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
       perror("socket");
       exit(1);
     }
@@ -35,39 +45,47 @@ int main(void)
         exit(1);
     }
 
-    FD_ZERO(&rdfds);
-    FD_SET(0, &rdfds);
-    FD_SET(s, &rdfds);
+    while(1) {
+        FD_ZERO(&rdfds);
+        FD_SET(0, &rdfds);
+        FD_SET(s, &rdfds);
 
-    if (select(s + 1, &rdfds, NULL, NULL, NULL) < 0) {
-        // エラー処理
-        fprintf(stderr, "Error!\n");
-    }
+        if (select(s + 1, &rdfds, NULL, NULL, NULL) < 0) {
+            fprintf(stderr, "Error!\n");
+        }
 
-    if (FD_ISSET(0, &rdfds)) {
-        // 標準入力から入力
-        fgets(sbuf, sizeof(sbuf), stdin);
-        buf[strlen(buf) - 1] = '\0';
-        datalen = sizeof(char) * (strlen(buf) + 1);
-        inet_aton(argv[1], &ipaddr);
+        if (FD_ISSET(0, &rdfds)) {
+            memset(sbuf, 0, sizeof(sbuf));
+            fgets(sbuf, sizeof(sbuf), stdin);
+            sbuf[strlen(sbuf) - 1] = '\0';
+            datalen = sizeof(char) * (strlen(sbuf) + 1);
+            inet_aton(argv[1], &ipaddr);
+            skt.sin_family = AF_INET;
+            skt.sin_port = htons(port);
+            skt.sin_addr.s_addr = ipaddr.s_addr;
+            if ((count = sendto(s, sbuf, datalen, 0, (struct sockaddr *)&skt, sizeof(skt))) < 0) {
+                perror("sendto");
+                exit(1);
+            }
+            if (strcmp(sbuf, "FIN") == 0) {
+                break;
+            }
+        }
 
-        skt.sin_family = AF_INET;
-        skt.sin_port = htons(port);
-        skt.sin_addr.s_addr = htonl(ipaddr.s_addr);
-        if ((count = sendto(s, sbuf, datalen, 0, (struct sockaddr *)&skt, sizeof skt)) < 0) {
-            perror("sendto");
-            exit(1);
+        if (FD_ISSET(s, &rdfds)) {
+            memset(buf, 0, sizeof(buf));
+            socklen_t sktlen = sizeof(skt);
+            if ((count = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
+                perror("recvfrom");
+                exit(1);
+            }
+            printf("%s: %s\n", inet_ntoa(skt.sin_addr), buf);
+            if (strcmp(buf, "FIN") == 0) {
+                break;
+            }
         }
     }
-
-    if (FD_ISSET(s, &rdfds)) {
-        // パケット受信
-        // recvfrom & printf
-        sktlen = sizeof(skt);
-        if ((count = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
-            perror("recvfrom");
-            exit(1);
-        }
-        printf("%s\n", buf);
-    }
+    close(s);
+    printf("Chat close!\n");
+    return 0;
 }
