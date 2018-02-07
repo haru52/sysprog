@@ -11,24 +11,16 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define BUF_SIZE 512
-#define PORT_NUM 49155
-#define SERV_SIZE 6
+#define BUFSIZE 512
+#define PORT_NUM "49155"
 
 int main(int argc, char *argv[])
 {
-    int s, count, datalen;
-    struct sockaddr_in myskt;
-    struct sockaddr_in skt;
-    char buf[BUF_SIZE];
-    char sbuf[BUF_SIZE];
+    struct addrinfo myhints, hints, *myres, *res;
+    struct sockaddr_storage sin;
+    char *host, *serv, buf[BUFSIZE], sbuf[BUFSIZE];
+    int sd, err, count, datalen;
     socklen_t sktlen;
-    in_port_t myport;
-    struct in_addr ipaddr;
-    struct addrinfo hints, *res;
-    char *host;
-    char serv[SERV_SIZE];
-    int err;
     fd_set rdfds;
 
     if (argc != 2) {
@@ -37,23 +29,26 @@ int main(int argc, char *argv[])
     }
     printf("Chat start!\nInput \"FIN\" if you want to close this chat.\n\n");
 
-    if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+    serv = PORT_NUM;
+    memset(&myhints, 0, sizeof(myhints));
+    myhints.ai_flags = AI_PASSIVE;
+    myhints.ai_socktype = SOCK_DGRAM;
+    if ((err = getaddrinfo(NULL, serv, &myhints, &myres)) < 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(err));
+        exit(1);
+    }
+    if ((sd = socket(myres->ai_family, myres->ai_socktype, myres->ai_protocol)) < 0) {
         perror("socket");
         exit(1);
     }
-    myport = PORT_NUM;
-    memset(&myskt, 0, sizeof(myskt));
-    myskt.sin_family = AF_INET;
-    myskt.sin_port = htons(myport);
-    myskt.sin_addr.s_addr = htonl(INADDR_ANY);
-    if (bind(s, (struct sockaddr *)&myskt, sizeof(myskt)) < 0) {
+    if (bind(sd, myres->ai_addr, myres->ai_addrlen) < 0) {
         perror("bind");
         exit(1);
     }
-    sktlen = sizeof(skt);
+    freeaddrinfo(myres);
+    sktlen = sizeof(sin);
 
     host = argv[1];
-    snprintf(serv, SERV_SIZE, "%d", PORT_NUM);
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_DGRAM;
     if ((err = getaddrinfo(host, serv, &hints, &res)) < 0) {
@@ -64,9 +59,9 @@ int main(int argc, char *argv[])
     while(1) {
         FD_ZERO(&rdfds);
         FD_SET(0, &rdfds);
-        FD_SET(s, &rdfds);
+        FD_SET(sd, &rdfds);
 
-        if (select(s + 1, &rdfds, NULL, NULL, NULL) < 0) {
+        if (select(sd + 1, &rdfds, NULL, NULL, NULL) < 0) {
             fprintf(stderr, "Error!\n");
         }
 
@@ -74,7 +69,7 @@ int main(int argc, char *argv[])
             fgets(sbuf, sizeof(sbuf), stdin);
             sbuf[strlen(sbuf) - 1] = '\0';
             datalen = sizeof(char) * (strlen(sbuf) + 1);
-            if ((count = sendto(s, sbuf, datalen, 0, res->ai_addr, res->ai_addrlen)) < 0) {
+            if ((count = sendto(sd, sbuf, datalen, 0, res->ai_addr, res->ai_addrlen)) < 0) {
                 perror("sendto");
                 exit(1);
             }
@@ -83,8 +78,8 @@ int main(int argc, char *argv[])
             }
         }
 
-        if (FD_ISSET(s, &rdfds)) {
-            if ((count = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
+        if (FD_ISSET(sd, &rdfds)) {
+            if ((count = recvfrom(sd, buf, sizeof(buf), 0, (struct sockaddr *)&sin, &sktlen)) < 0) {
                 perror("recvfrom");
                 exit(1);
             }
@@ -95,7 +90,7 @@ int main(int argc, char *argv[])
         }
     }
     freeaddrinfo(res);
-    close(s);
+    close(sd);
     printf("\nChat close!\n");
     return 0;
 }
