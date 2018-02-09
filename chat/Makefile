@@ -1,2 +1,2 @@
 chat: chat.c
-	gcc -o bin/chat chat.c
+	gcc -o chat chat.c
