@@ -14,6 +14,7 @@
 
 void quit(int sd) {
     struct myftph pkt;
+
     pkt.type = QUIT;
     if (send(sd, &pkt, sizeof(pkt), 0) < 0) {
         perror("send");
@@ -39,36 +40,34 @@ int get(int sd, char *path1, char *path2)
 
 int put(int sd, char *path1, char *path2)
 {
-    int count;
     FILE *fp;
     struct myftph_data pkt_data;
 
     if ((fp = fopen(path1, "r")) == NULL) {
-      perror("fopen");
-      exit(1);
+        perror("fopen");
+        exit(1);
     }
 
     pkt_data.type = STOR;
     pkt_data.length = strlen(path2);
     strcpy(pkt_data.data, path2);
-    if ((count = send(sd, &pkt_data, sizeof(pkt_data), 0)) < 0) {
+    if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
         perror("send");
         exit(1);
     }
 
+    pkt_data.type = DATA;
     while (1) {
-        pkt_data.type = DATA;
-        int size = fread(pkt_data.data, sizeof(char), DATASIZE, fp);
-        pkt_data.length = size;
-        if (size == DATASIZE) {
+        pkt_data.length = fread(pkt_data.data, sizeof(char), DATASIZE, fp);
+        if (pkt_data.length == DATASIZE) {
             pkt_data.code = 0x01;
-            if ((count = send(sd, &pkt_data, sizeof(pkt_data), 0)) < 0) {
+            if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
                 perror("send");
                 exit(1);
             }
         } else {
             pkt_data.code = 0x00;
-            if ((count = send(sd, &pkt_data, sizeof(pkt_data), 0)) < 0) {
+            if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
                 perror("send");
                 exit(1);
             }
@@ -146,9 +145,12 @@ void ftp_proc(int sd)
             printf ("Error: Invalid argument\nUsage: get path1 [path2]\n");
             return;
         }
-        if (nargs == 2)
-            strcpy(av[2], av[1]);
-        get(sd, av[1], av[2]);
+        if (nargs == 2) {
+            path2 = (char *) malloc(strlen(av[1]) + 1);
+            strcpy(path2, av[1]);
+            get(sd, av[1], path2);
+        } else
+            get(sd, av[1], av[2]);
     } else if (strcmp(av[0], "put") == 0) {
         if (nargs != 2 && nargs != 3) {
             printf ("Error: Invalid argument\nUsage: put path1 [path2]\n");
@@ -157,9 +159,9 @@ void ftp_proc(int sd)
         if (nargs == 2) {
             path2 = (char *) malloc(strlen(av[1]) + 1);
             strcpy(path2, av[1]);
-            av[2] = path2;
-        }
-        put(sd, av[1], av[2]);
+            put(sd, av[1], path2);
+        } else
+            put(sd, av[1], av[2]);
     } else if (strcmp(av[0], "help") == 0) {
         // help();
     } else {
@@ -170,12 +172,8 @@ void ftp_proc(int sd)
 int main(int argc, char *argv[])
 {
     struct addrinfo hints, *res;
-    char *host, *serv, buf[BUFSIZE];
+    char *host, *serv;
     int sd, err;
-
-    char *av[AVSIZE];
-    int ngargs;
-    char path1[PATHSIZE], path2[PATHSIZE];
 
     if (argc != 2) {
         fprintf(stderr, "Usage: ./myftpc [server hostname]\n");

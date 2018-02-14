@@ -27,22 +27,21 @@ void quit(int sd1) {
 
 void stor(int sd1, struct myftph pkt)
 {
-    int count;
     char path[DATASIZE];
+    FILE *fp;
     struct myftph_data pkt_data;
-    memset(path, 0, sizeof(path));
 
     if (recv(sd1, path, DATASIZE, 0) < 0) {
         perror("recv");
         exit(1);
     }
     path[pkt.length] = '\0';
-    FILE *fp;
+
     if ((fp = fopen(path, "w")) == NULL) {
         perror("fopen");
         exit(1);
     }
-    if ((count = recv(sd1, &pkt_data, sizeof(pkt_data), 0)) < 0) {
+    if (recv(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
         perror("recv");
         exit(1);
     }
@@ -58,21 +57,19 @@ int main(int argc, char *argv[])
     struct addrinfo hints, *res;
     struct sockaddr_storage sin;
     char *serv;
-    int sd, sd1, err, count;
+    int sd, sd1, err;
     socklen_t sktlen;
-    int pid;
-    int status;
+    pid_t pid;
 
     if (argc != 1 && argc != 2) {
         fprintf(stderr, "Usage: ./myftpd [current directory (option)]\n");
         exit(1);
     }
 
-    // servが指す領域にサービス名(e.g, "http” or "80”)を格納しておく.
     serv = PORT_NUM;
     memset(&hints, 0, sizeof(hints));
-    hints.ai_flags = AI_PASSIVE; // accept()で使用することを示す 
-    hints.ai_socktype = SOCK_STREAM; // TCPを使用することを示す
+    hints.ai_flags = AI_PASSIVE;
+    hints.ai_socktype = SOCK_STREAM;
     if ((err = getaddrinfo(NULL, serv, &hints, &res)) < 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(err));
         exit(1);
@@ -91,8 +88,8 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    sktlen = sizeof (struct sockaddr_storage);
     while (1) {
-        sktlen = sizeof (struct sockaddr_storage);
         if ((sd1 = accept(sd, (struct sockaddr *) &sin, &sktlen)) < 0) {
             perror("accept");
             exit(1);
@@ -105,12 +102,9 @@ int main(int argc, char *argv[])
             struct myftph pkt;
             struct myftph_data pkt_data;
 
-            int quit_flag = 0;
             while(1) {
-                if (quit_flag)
-                    break;
                 while(1) {
-                    if ((count = recv(sd1, &pkt, sizeof(pkt), 0)) < 0) {
+                    if (recv(sd1, &pkt, sizeof(pkt), 0) < 0) {
                         perror("recv");
                         exit(1);
                     } else

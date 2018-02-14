@@ -1,11 +1,9 @@
-#define BUFSIZE 512
 #define PORT_NUM "50021"
 #define DATASIZE 1024
-
-#define AVSIZE 4
-#define PATHSIZE 64
 #define COMMANDSIZE 128
+#define AVSIZE 4
 
+// myFTP packet types
 #define QUIT 0x01
 #define PWD 0x02
 #define CWD 0x03
