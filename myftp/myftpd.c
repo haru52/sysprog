@@ -15,6 +15,7 @@
 
 void quit(int sd1) {
     struct myftph pkt;
+
     pkt.type = OK;
     pkt.code = 0x00;
     if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
@@ -41,13 +42,24 @@ void stor(int sd1, struct myftph pkt)
         perror("fopen");
         exit(1);
     }
-    if (recv(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
-        perror("recv");
-        exit(1);
-    }
-    if (fwrite(pkt_data.data, sizeof(char), pkt_data.length, fp) < pkt_data.length) {
-        perror("fwrite");
-        exit(1);
+
+    while (1) {
+        if (recv(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
+            perror("recv");
+            exit(1);
+        }
+        if (fwrite(pkt_data.data, sizeof(char), pkt_data.length, fp) < pkt_data.length) {
+            perror("fwrite");
+            exit(1);
+        }
+        if (pkt_data.code == 0x00)
+            break;
+        else if (pkt_data.code == 0x01)
+            continue;
+        else {
+            fprintf(stderr, "Error: stor: Invalid code\n");
+            break;
+        }
     }
     fclose(fp);
 }
@@ -65,6 +77,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Usage: ./myftpd [current directory (option)]\n");
         exit(1);
     }
+
+    printf("myFTP server is running...\n");
 
     serv = PORT_NUM;
     memset(&hints, 0, sizeof(hints));
