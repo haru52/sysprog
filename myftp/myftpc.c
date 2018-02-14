@@ -5,12 +5,31 @@
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include "myftp.h"
+
+void print_error_message(uint8_t  type, uint8_t code) {
+    if (type == CMD_ERR && code == 0x01)
+        printf("エラー: 構文エラー\n");
+    else if (type == CMD_ERR && code == 0x02)
+        printf("エラー: 未定義コマンド\n");
+    else if (type == CMD_ERR && code == 0x03)
+        printf("エラー: プロトコルエラー\n");
+    else if (type == FILE_ERR && code == 0x00)
+        printf("エラー: ファイル/ディレクトリが存在しない\n");
+    else if (type == FILE_ERR && code == 0x01)
+        printf("エラー: ファイル/ディレクトリのアクセス権限がない\n");
+    else if (type == UNKWN_ERR && code == 0x05)
+        printf("エラー: 未定義のエラー\n");
+    else
+        printf("Unexpected error\n");
+}
 
 void quit(int sd) {
     struct myftph pkt;
@@ -33,49 +52,138 @@ void quit(int sd) {
     }
 }
 
-int get(int sd, char *path1, char *path2)
+void pwd(int sd)
 {
-    return 0;
+    
 }
 
-int put(int sd, char *path1, char *path2)
+void cd(int sd, char *path)
+{
+    
+}
+
+void dir(int sd, char *path)
+{
+    
+}
+
+void lpwd(void)
+{
+    
+}
+
+void lcd(char *path)
+{
+    
+}
+
+void ldir(char *path)
+{
+    
+}
+
+void get(int sd, char *path1, char *path2)
 {
     FILE *fp;
+    struct myftph pkt;
     struct myftph_data pkt_data;
 
-    if ((fp = fopen(path1, "r")) == NULL) {
-        perror("fopen");
-        exit(1);
-    }
-
-    pkt_data.type = STOR;
-    pkt_data.length = strlen(path2);
-    strcpy(pkt_data.data, path2);
+    pkt_data.type = RETR;
+    pkt_data.length = strlen(path1);
+    strcpy(pkt_data.data, path1);
     if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
         perror("send");
         exit(1);
     }
 
-    pkt_data.type = DATA;
+    if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
+        perror("recv");
+        exit(1);
+    }
+    if (pkt.type != OK || pkt.code != 0x01) {
+        print_error_message(pkt.type, pkt.code);
+        return;
+    }
+
+    if ((fp = fopen(path2, "w")) == NULL) {
+        perror("fopen");
+        exit(1);
+    }
+
     while (1) {
-        pkt_data.length = fread(pkt_data.data, sizeof(char), DATASIZE, fp);
-        if (pkt_data.length == DATASIZE) {
-            pkt_data.code = 0x01;
-            if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
-                perror("send");
-                exit(1);
-            }
-        } else {
-            pkt_data.code = 0x00;
-            if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
-                perror("send");
-                exit(1);
-            }
+        if (recv(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
+            perror("recv");
+            exit(1);
+        }
+        if (fwrite(pkt_data.data, sizeof(char), pkt_data.length, fp) < pkt_data.length) {
+            perror("fwrite");
+            exit(1);
+        }
+        if (pkt_data.code == 0x00)
+            break;
+        else if (pkt_data.code == 0x01)
+            continue;
+        else {
+            fprintf(stderr, "Error: put: Invalid code\n");
             break;
         }
     }
     fclose(fp);
-    return 0;
+}
+
+void put(int sd, char *path1, char *path2)
+{
+    FILE *fp;
+    struct myftph pkt;
+    struct myftph_data pkt_data;
+
+    if ((fp = fopen(path2, "r")) == NULL) {
+        perror("fopen");
+        exit(1);
+    }
+
+    pkt_data.type = STOR;
+    pkt_data.length = strlen(path1);
+    strcpy(pkt_data.data, path1);
+    if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
+        perror("send");
+        exit(1);
+    }
+
+    if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
+        perror("recv");
+        exit(1);
+    }
+    if (pkt.type != OK || pkt.code != 0x01) {
+        print_error_message(pkt.type, pkt.code);
+        return;
+    }
+
+    while (1) {
+        if (recv(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
+            perror("recv");
+            exit(1);
+        }
+        if (fwrite(pkt_data.data, sizeof(char), pkt_data.length, fp) < pkt_data.length) {
+            perror("fwrite");
+            exit(1);
+        }
+        if (pkt_data.code == 0x00)
+            break;
+        else if (pkt_data.code == 0x01)
+            continue;
+        else {
+            fprintf(stderr, "Error: stor: Invalid code\n");
+            break;
+        }
+    }
+    fclose(fp);
+    return;
+}
+
+void help(void)
+{
+    
 }
 
 void getargv(char *command, char *av[], int *nargs)
@@ -116,15 +224,6 @@ void ftp_proc(int sd)
 
     fgets(command, sizeof(command), stdin);
     getargv(command, av, &nargs);
-
-    /* Debug */
-    // int i;
-    // printf("\nnargs: %d\n", nargs);
-    // for (i = 0; i < nargs; i++) {
-    //     printf("av[%d]: %s\n", i, av[i]);
-    // }
-    // printf("\n");
-    /* Debug */
 
     if (strcmp(av[0], "quit") == 0) {
         quit(sd);

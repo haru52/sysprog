@@ -5,11 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <unistd.h>
 #include "myftp.h"
 
@@ -26,6 +27,77 @@ void quit(int sd1) {
     exit(0);
 }
 
+void cwd(int sd1, struct myftph pkt)
+{
+    
+}
+
+void list(int sd1, struct myftph pkt)
+{
+    
+}
+
+void retr(int sd1, struct myftph pkt)
+{
+    char path[DATASIZE];
+    FILE *fp;
+    struct myftph_data pkt_data;
+
+    if (recv(sd1, path, DATASIZE, 0) < 0) {
+        perror("recv");
+        return;
+    }
+    path[pkt.length] = '\0';
+
+    if ((fp = fopen(path, "r")) == NULL) {
+        perror("fopen");
+        switch (errno) {
+            case ENOENT:
+                pkt.type = FILE_ERR;
+                pkt.code = 0x00;
+                break;
+            case EACCES:
+                pkt.type = FILE_ERR;
+                pkt.code = 0x01;
+                break;
+            default:
+                pkt.type = UNKWN_ERR;
+                pkt.code = 0x05;
+        }
+        if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
+            perror("send");
+        }
+        return;
+    }
+
+    pkt.type = OK;
+    pkt.code = 0x01;
+    if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
+        perror("send");
+        return;
+    }
+
+    pkt_data.type = DATA;
+    while (1) {
+        pkt_data.length = fread(pkt_data.data, sizeof(char), DATASIZE, fp);
+        if (pkt_data.length == DATASIZE) {
+            pkt_data.code = 0x01;
+            if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
+                perror("send");
+                exit(1);
+            }
+        } else {
+            pkt_data.code = 0x00;
+            if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
+                perror("send");
+                exit(1);
+            }
+            break;
+        }
+    }
+    fclose(fp);
+}
+
 void stor(int sd1, struct myftph pkt)
 {
     char path[DATASIZE];
@@ -40,7 +112,14 @@ void stor(int sd1, struct myftph pkt)
 
     if ((fp = fopen(path, "w")) == NULL) {
         perror("fopen");
-        exit(1);
+        return;
+    }
+
+    pkt.type = OK;
+    pkt.code = 0x02;
+    if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
+        perror("send");
+        return;
     }
 
     while (1) {
@@ -134,13 +213,16 @@ int main(int argc, char *argv[])
                     case LIST:
                         break;
                     case RETR:
+                        retr(sd1, pkt);
                         break;
                     case STOR:
                         stor(sd1, pkt);
                         break;
                     default:
-                        // Invalid type
-                        break;
+                        pkt.type = CMD_ERR;
+                        pkt.code = 0x02;
+                        if (send(sd1, &pkt, sizeof(pkt), 0) < 0)
+                            perror("send");
                 }
             }
         } else {

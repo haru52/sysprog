@@ -11,9 +11,9 @@
 #define RETR 0x05
 #define STOR 0x06
 #define OK 0x10
-#define CMDERR 0x11
-#define FILEERR 0x12
-#define UNKWNERR 0x13
+#define CMD_ERR 0x11
+#define FILE_ERR 0x12
+#define UNKWN_ERR 0x13
 #define DATA 0x20
 
 struct myftph_data {
