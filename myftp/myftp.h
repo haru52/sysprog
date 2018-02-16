@@ -1,7 +1,10 @@
-#define PORT_NUM "50021"
+// myftp.h
+// myFTP header
+
 #define DATASIZE 1024
 #define COMMANDSIZE 128
 #define AVSIZE 4
+#define PORT_NUM "50021"
 
 // myFTP packet types
 #define QUIT 0x01

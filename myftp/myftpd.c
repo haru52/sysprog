@@ -21,7 +21,7 @@ void quit(int sd1) {
     pkt.code = 0x00;
     if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
         perror("send");
-        exit(1);
+        return;
     }
     close(sd1);
     exit(0);
@@ -64,9 +64,8 @@ void retr(int sd1, struct myftph pkt)
                 pkt.type = UNKWN_ERR;
                 pkt.code = 0x05;
         }
-        if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
+        if (send(sd1, &pkt, sizeof(pkt), 0) < 0)
             perror("send");
-        }
         return;
     }
 
@@ -84,14 +83,13 @@ void retr(int sd1, struct myftph pkt)
             pkt_data.code = 0x01;
             if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
                 perror("send");
-                exit(1);
+                fclose(fp);
+                return;
             }
         } else {
             pkt_data.code = 0x00;
-            if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
+            if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0)
                 perror("send");
-                exit(1);
-            }
             break;
         }
     }
@@ -151,13 +149,12 @@ int main(int argc, char *argv[])
     int sd, sd1, err;
     socklen_t sktlen;
     pid_t pid;
+    struct myftph pkt;
 
     if (argc != 1 && argc != 2) {
         fprintf(stderr, "Usage: ./myftpd [current directory (option)]\n");
         exit(1);
     }
-
-    printf("myFTP server is running...\n");
 
     serv = PORT_NUM;
     memset(&hints, 0, sizeof(hints));
@@ -182,35 +179,33 @@ int main(int argc, char *argv[])
     }
 
     sktlen = sizeof (struct sockaddr_storage);
+    printf("myFTP server is running...\n");
+
     while (1) {
         if ((sd1 = accept(sd, (struct sockaddr *) &sin, &sktlen)) < 0) {
             perror("accept");
             exit(1);
         }
-
         if ((pid = fork()) < 0) {
             perror("fork");
             exit(1);
         } else if (pid == 0) {
-            struct myftph pkt;
-            struct myftph_data pkt_data;
-
             while(1) {
                 while(1) {
-                    if (recv(sd1, &pkt, sizeof(pkt), 0) < 0) {
+                    if (recv(sd1, &pkt, sizeof(pkt), 0) < 0)
                         perror("recv");
-                        exit(1);
-                    } else
+                    else
                         break;
                 }
-
                 switch (pkt.type) {
                     case QUIT:
                         quit(sd1);
                         break;
                     case CWD:
+                        cwd(sd1, pkt);
                         break;
                     case LIST:
+                        list(sd1, pkt);
                         break;
                     case RETR:
                         retr(sd1, pkt);
@@ -225,9 +220,8 @@ int main(int argc, char *argv[])
                             perror("send");
                 }
             }
-        } else {
+        } else
             close(sd1);
-        }
     }
     return 0;
 }

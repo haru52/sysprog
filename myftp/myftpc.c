@@ -228,17 +228,19 @@ void ftp_proc(int sd)
     if (strcmp(av[0], "quit") == 0) {
         quit(sd);
     } else if (strcmp(av[0], "pwd") == 0) {
-        // pwd();
+        pwd(sd);
     } else if (strcmp(av[0], "cd") == 0) {
-        // cd();
+        if (av[1]) {
+            cd(sd, av[1]);
+        }
     } else if (strcmp(av[0], "dir") == 0) {
-        // dir();
+        dir(sd, av[1]);
     } else if (strcmp(av[0], "lpwd") == 0) {
-        // lpwd();
+        lpwd();
     } else if (strcmp(av[0], "lcd") == 0) {
-        // lcd();
+        lcd(av[1]);
     } else if (strcmp(av[0], "ldir") == 0) {
-        // ldir();
+        ldir(av[1]);
     } else if (strcmp(av[0], "get") == 0) {
         if (nargs != 2 && nargs != 3) {
             printf ("Error: Invalid argument\nUsage: get path1 [path2]\n");
