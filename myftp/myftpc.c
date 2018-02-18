@@ -49,16 +49,84 @@ void quit(int sd) {
         close(sd);
         exit(0);
     } else {
-        fprintf(stderr, "Error: quit\n");
+        print_error_message(pkt.type, pkt.code);
+        close(sd);
         exit(1);
     }
 }
 
-void pwd(int sd) {}
+void pwd(int sd)
+{
+    struct myftph pkt;
+    struct myftph_data pkt_data;
+    char *path;
 
-void cd(int sd, char *path) {}
+    pkt.type = PWD;
+    if (send(sd, &pkt, sizeof(pkt), 0) < 0) {
+        perror("pwd");
+        return;
+    }
+    if (recv(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
+        perror("pwd");
+        return;
+    }
+    if (pkt_data.type == OK && pkt_data.code == 0x00) {
+        path = (char *) malloc(pkt_data.length + 1);
+        memset(path, 0, pkt_data.length + 1);
+        strncpy(path, pkt_data.data, pkt_data.length);
+        printf("%s\n", path);
+    } else
+        print_error_message(pkt_data.type, pkt_data.code);
+}
 
-void dir(int sd, char *path) {}
+void cd(int sd, char *path)
+{
+    struct myftph_data pkt_data;
+    struct myftph pkt;
+
+    pkt_data.type = CWD;
+    pkt_data.length = strlen(path);
+    strcpy(pkt_data.data, path);
+    if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
+        perror("cd");
+        return;
+    }
+    if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
+        perror("cd");
+        return;
+    }
+    if (pkt.type != OK || pkt.code != 0x00)
+        print_error_message(pkt.type, pkt.code);
+}
+
+void dir(int sd, char *path, int nargs)
+{
+    struct myftph_data pkt_data;
+    char *file_list;
+
+    pkt_data.type = LIST;
+    if (nargs == 1)
+        pkt_data.length = 0;
+    else {
+        pkt_data.length = strlen(path);
+        strcpy(pkt_data.data, path);
+    }
+    if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
+        perror("dir");
+        return;
+    }
+    if (recv(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
+        perror("dir");
+        return;
+    }
+    if (pkt_data.type == OK && pkt_data.code == 0x00) {
+        file_list = (char *) malloc(pkt_data.length + 1);
+        memset(file_list, 0, pkt_data.length + 1);
+        strncpy(file_list, pkt_data.data, pkt_data.length);
+        printf("%s\n", file_list);
+    } else
+        print_error_message(pkt_data.type, pkt_data.code);
+}
 
 void lpwd(void)
 {
@@ -245,11 +313,23 @@ void ftp_proc(int sd)
     if (strcmp(av[0], "quit") == 0) {
         quit(sd);
     } else if (strcmp(av[0], "pwd") == 0) {
-        // pwd(sd);
+        if (nargs != 1) {
+            fprintf (stderr, "Error: Invalid argument\nUsage: pwd\n");
+            return;
+        }
+        pwd(sd);
     } else if (strcmp(av[0], "cd") == 0) {
-        // cd(sd, av[1]);
+        if (nargs != 2) {
+            fprintf (stderr, "Error: Invalid argument\nUsage: cd [path]\n");
+            return;
+        }
+        cd(sd, av[1]);
     } else if (strcmp(av[0], "dir") == 0) {
-        // dir(sd, av[1]);
+        if (nargs != 1 && nargs != 2) {
+            fprintf (stderr, "Error: Invalid argument\nUsage: dir [path (option)]\n");
+            return;
+        }
+        dir(sd, av[1], nargs);
     } else if (strcmp(av[0], "lpwd") == 0) {
         if (nargs != 1) {
             fprintf (stderr, "Error: Invalid argument\nUsage: lpwd\n");

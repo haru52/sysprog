@@ -5,11 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include "myftp.h"
@@ -27,14 +29,142 @@ void quit(int sd1) {
     exit(0);
 }
 
+void pwd(int sd1, struct myftph pkt)
+{
+    struct myftph_data pkt_data;
+
+    if (getcwd(pkt_data.data, DATASIZE) == NULL) {
+        perror("pwd");
+        pkt_data.type = UNKWN_ERR;
+        pkt_data.code = 0x05;
+    } else {
+        pkt_data.type = OK;
+        pkt_data.code = 0x00;
+        pkt_data.length = strlen(pkt_data.data);
+    }
+    if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0)
+        perror("pwd");
+}
+
 void cwd(int sd1, struct myftph pkt)
 {
-    
+    char path[DATASIZE];
+
+    if (recv(sd1, path, DATASIZE, 0) < 0) {
+        perror("cwd");
+        return;
+    }
+    path[pkt.length + 1] = '\0';
+    if (chdir(path) == -1) {
+        switch (errno) {
+            case ENOENT:
+                pkt.type = FILE_ERR;
+                pkt.code = 0x00;
+                break;
+            case EACCES:
+                pkt.type = FILE_ERR;
+                pkt.code = 0x01;
+                break;
+            default:
+                pkt.type = UNKWN_ERR;
+                pkt.code = 0x05;
+        }
+    } else {
+        pkt.type = OK;
+        pkt.code = 0x00;
+    }
+    if (send(sd1, &pkt, sizeof(pkt), 0) < 0)
+        perror("cwd");
 }
 
 void list(int sd1, struct myftph pkt)
 {
-    
+    char path[DATASIZE];
+    struct myftph_data pkt_data;
+    struct stat st;
+    DIR *dir;
+    struct dirent *dp;
+    char file_name[64];
+
+    if (recv(sd1, path, DATASIZE, 0) < 0) {
+        perror("list");
+        return;
+    }
+    if (pkt.length == 0) {
+        if (getcwd(path, DATASIZE) == NULL) {
+            perror("list");
+            switch (errno) {
+                case ENOENT:
+                    pkt_data.type = FILE_ERR;
+                    pkt_data.code = 0x00;
+                    break;
+                case EACCES:
+                    pkt_data.type = FILE_ERR;
+                    pkt_data.code = 0x01;
+                    break;
+                default:
+                    pkt_data.type = UNKWN_ERR;
+                    pkt_data.code = 0x05;
+            }
+            if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
+                perror("list");
+                return;
+            }
+            return;
+        }
+    } else
+        path[pkt.length + 1] = '\0';
+    memset(pkt_data.data, 0, DATASIZE);
+    if (stat(path, &st) == -1) {
+        perror("list: stat");
+        switch (errno) {
+            case ENOENT:
+                pkt_data.type = FILE_ERR;
+                pkt_data.code = 0x00;
+                break;
+            case EACCES:
+                pkt_data.type = FILE_ERR;
+                pkt_data.code = 0x01;
+                break;
+            default:
+                pkt_data.type = UNKWN_ERR;
+                pkt_data.code = 0x05;
+        }
+        if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
+            perror("list: send");
+            return;
+        }
+        return;
+    }
+    if (S_ISDIR(st.st_mode)) {
+        if ((dir = opendir(path)) == NULL) {
+            perror("list: opendir");
+            pkt_data.type = UNKWN_ERR;
+            pkt_data.code = 0x05;
+            if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
+                perror("list: send");
+                return;
+            }
+            return;
+        }
+        for (dp = readdir(dir); dp != NULL; dp = readdir(dir)) {
+            if (dp->d_name[0] != '.') {
+                strcpy(file_name, dp->d_name);
+                strcat(file_name, "\n");
+                strcat(pkt_data.data, file_name);
+            }
+        }
+        closedir(dir);
+        pkt_data.data[strlen(pkt_data.data) - 1] = '\0';
+    } else
+        strcpy(pkt_data.data, path);
+    pkt_data.type = OK;
+    pkt_data.code = 0x00;
+    pkt_data.length = strlen(pkt_data.data);
+    if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
+        perror("pwd");
+        return;
+    }
 }
 
 void retr(int sd1, struct myftph pkt)
@@ -200,6 +330,9 @@ int main(int argc, char *argv[])
                 switch (pkt.type) {
                     case QUIT:
                         quit(sd1);
+                        break;
+                    case PWD:
+                        pwd(sd1, pkt);
                         break;
                     case CWD:
                         cwd(sd1, pkt);
