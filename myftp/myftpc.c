@@ -5,30 +5,32 @@
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include "myftp.h"
 
-void print_error_message(uint8_t  type, uint8_t code) {
+void print_error_message(uint8_t type, uint8_t code) {
     if (type == CMD_ERR && code == 0x01)
-        printf("エラー: 構文エラー\n");
+        fprintf(stderr, "エラー: 構文エラー\n");
     else if (type == CMD_ERR && code == 0x02)
-        printf("エラー: 未定義コマンド\n");
+        fprintf(stderr, "エラー: 未定義コマンド\n");
     else if (type == CMD_ERR && code == 0x03)
-        printf("エラー: プロトコルエラー\n");
+        fprintf(stderr, "エラー: プロトコルエラー\n");
     else if (type == FILE_ERR && code == 0x00)
-        printf("エラー: ファイル/ディレクトリが存在しない\n");
+        fprintf(stderr, "エラー: ファイル/ディレクトリが存在しない\n");
     else if (type == FILE_ERR && code == 0x01)
-        printf("エラー: ファイル/ディレクトリのアクセス権限がない\n");
+        fprintf(stderr, "エラー: ファイル/ディレクトリのアクセス権限がない\n");
     else if (type == UNKWN_ERR && code == 0x05)
-        printf("エラー: 未定義のエラー\n");
+        fprintf(stderr, "エラー: 未定義のエラー\n");
     else
-        printf("Unexpected error\n");
+        fprintf(stderr, "Unexpected error\n");
 }
 
 void quit(int sd) {
@@ -52,30 +54,22 @@ void quit(int sd) {
     }
 }
 
-void pwd(int sd)
-{
-    
-}
+void pwd(int sd) {}
 
-void cd(int sd, char *path)
-{
-    
-}
+void cd(int sd, char *path) {}
 
-void dir(int sd, char *path)
-{
-    
-}
+void dir(int sd, char *path) {}
 
 void lpwd(void)
 {
     char path[PATHSIZE];
 
     memset(path, 0, PATHSIZE);
-    if(getcwd(path, PATHSIZE) == NULL)
+    if (getcwd(path, PATHSIZE) == NULL) {
         perror("lpwd");
-    else
-        printf("%s\n", path);
+        return;
+    }
+    printf("%s\n", path);
 }
 
 void lcd(char *path)
@@ -86,7 +80,23 @@ void lcd(char *path)
 
 void ldir(char *path)
 {
-    
+    struct stat st;
+    DIR *dir;
+    struct dirent *dp;
+
+    if (stat(path, &st) == -1) {
+        perror("ldir");
+        return;
+    }
+    if (S_ISDIR(st.st_mode)) {
+        dir = opendir(path);
+        for (dp = readdir(dir); dp != NULL; dp = readdir(dir)) {
+            if (dp->d_name[0] != '.')
+                printf("%s\n", dp->d_name);
+        }
+        closedir(dir);
+    } else
+        printf("%s\n", path);
 }
 
 void get(int sd, char *path1, char *path2)
@@ -235,13 +245,11 @@ void ftp_proc(int sd)
     if (strcmp(av[0], "quit") == 0) {
         quit(sd);
     } else if (strcmp(av[0], "pwd") == 0) {
-        pwd(sd);
+        // pwd(sd);
     } else if (strcmp(av[0], "cd") == 0) {
-        if (av[1]) {
-            cd(sd, av[1]);
-        }
+        // cd(sd, av[1]);
     } else if (strcmp(av[0], "dir") == 0) {
-        dir(sd, av[1]);
+        // dir(sd, av[1]);
     } else if (strcmp(av[0], "lpwd") == 0) {
         if (nargs != 1) {
             fprintf (stderr, "Error: Invalid argument\nUsage: lpwd\n");
@@ -255,7 +263,18 @@ void ftp_proc(int sd)
         }
         lcd(av[1]);
     } else if (strcmp(av[0], "ldir") == 0) {
-        ldir(av[1]);
+        if (nargs != 1 && nargs != 2) {
+            fprintf (stderr, "Error: Invalid argument\nUsage: ldir [path (option)]\n");
+            return;
+        }
+        if (nargs == 1) {
+            char path[PATHSIZE];
+            memset(path, 0, PATHSIZE);
+            if (getcwd(path, PATHSIZE) == NULL)
+                perror("ldir");
+            ldir(path);
+        } else
+            ldir(av[1]);
     } else if (strcmp(av[0], "get") == 0) {
         if (nargs != 2 && nargs != 3) {
             fprintf (stderr, "Error: Invalid argument\nUsage: get [path 1] [path 2 (option)]\n");
@@ -317,7 +336,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    while(1) {
+    while (1) {
         printf("myFTP%% ");
         ftp_proc(sd);
     }

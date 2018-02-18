@@ -190,8 +190,8 @@ int main(int argc, char *argv[])
             perror("fork");
             exit(1);
         } else if (pid == 0) {
-            while(1) {
-                while(1) {
+            while (1) {
+                while (1) {
                     if (recv(sd1, &pkt, sizeof(pkt), 0) < 0)
                         perror("recv");
                     else
