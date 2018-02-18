@@ -69,12 +69,19 @@ void dir(int sd, char *path)
 
 void lpwd(void)
 {
-    
+    char path[PATHSIZE];
+
+    memset(path, 0, PATHSIZE);
+    if(getcwd(path, PATHSIZE) == NULL)
+        perror("lpwd");
+    else
+        printf("%s\n", path);
 }
 
 void lcd(char *path)
 {
-    
+    if (chdir(path) == -1)
+        perror("lcd");
 }
 
 void ldir(char *path)
@@ -183,7 +190,7 @@ void put(int sd, char *path1, char *path2)
 
 void help(void)
 {
-    
+    printf("%s\n", HELP_TEXT);
 }
 
 void getargv(char *command, char *av[], int *nargs)
@@ -236,14 +243,22 @@ void ftp_proc(int sd)
     } else if (strcmp(av[0], "dir") == 0) {
         dir(sd, av[1]);
     } else if (strcmp(av[0], "lpwd") == 0) {
+        if (nargs != 1) {
+            fprintf (stderr, "Error: Invalid argument\nUsage: lpwd\n");
+            return;
+        }
         lpwd();
     } else if (strcmp(av[0], "lcd") == 0) {
+        if (nargs != 2) {
+            fprintf (stderr, "Error: Invalid argument\nUsage: lcd [path]\n");
+            return;
+        }
         lcd(av[1]);
     } else if (strcmp(av[0], "ldir") == 0) {
         ldir(av[1]);
     } else if (strcmp(av[0], "get") == 0) {
         if (nargs != 2 && nargs != 3) {
-            printf ("Error: Invalid argument\nUsage: get path1 [path2]\n");
+            fprintf (stderr, "Error: Invalid argument\nUsage: get [path 1] [path 2 (option)]\n");
             return;
         }
         if (nargs == 2) {
@@ -254,7 +269,7 @@ void ftp_proc(int sd)
             get(sd, av[1], av[2]);
     } else if (strcmp(av[0], "put") == 0) {
         if (nargs != 2 && nargs != 3) {
-            printf ("Error: Invalid argument\nUsage: put path1 [path2]\n");
+            fprintf (stderr, "Error: Invalid argument\nUsage: put [path 1] [path 2 (option)]\n");
             return;
         }
         if (nargs == 2) {
@@ -264,9 +279,9 @@ void ftp_proc(int sd)
         } else
             put(sd, av[1], av[2]);
     } else if (strcmp(av[0], "help") == 0) {
-        // help();
+        help();
     } else {
-        printf("Invalid command\n");
+        fprintf(stderr, "Error: Invalid command\n");
     }
 }
 
