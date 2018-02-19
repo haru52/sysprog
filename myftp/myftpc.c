@@ -30,7 +30,7 @@ void print_error_message(uint8_t type, uint8_t code) {
     else if (type == UNKWN_ERR && code == 0x05)
         fprintf(stderr, "エラー: 未定義のエラー\n");
     else
-        fprintf(stderr, "Unexpected error\n");
+        fprintf(stderr, "Unexpected error\nType: 0x%x, Code: 0x%x\n", type, code);
 }
 
 void quit(int sd) {
@@ -38,11 +38,11 @@ void quit(int sd) {
 
     pkt.type = QUIT;
     if (send(sd, &pkt, sizeof(pkt), 0) < 0) {
-        perror("send");
+        perror("quit: send");
         exit(1);
     }
     if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
-        perror("recv");
+        perror("quit: recv");
         exit(1);
     }
     if (pkt.type == OK && pkt.code == 0x00) {
@@ -169,15 +169,15 @@ void ldir(char *path)
 
 void get(int sd, char *path1, char *path2)
 {
-    FILE *fp;
-    struct myftph pkt;
     struct myftph_data pkt_data;
+    struct myftph pkt;
+    FILE *fp;
 
     pkt_data.type = RETR;
     pkt_data.length = strlen(path1);
     strcpy(pkt_data.data, path1);
     if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
-        perror("send");
+        perror("get: send");
         exit(1);
     }
 
@@ -219,51 +219,54 @@ void get(int sd, char *path1, char *path2)
 void put(int sd, char *path1, char *path2)
 {
     FILE *fp;
-    struct myftph pkt;
     struct myftph_data pkt_data;
+    struct myftph pkt;
 
-    if ((fp = fopen(path2, "r")) == NULL) {
-        perror("fopen");
+    if ((fp = fopen(path1, "r")) == NULL) {
+        perror("put: fopen");
         exit(1);
     }
-
     pkt_data.type = STOR;
-    pkt_data.length = strlen(path1);
-    strcpy(pkt_data.data, path1);
+    pkt_data.length = strlen(path2);
+    strcpy(pkt_data.data, path2);
     if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
-        perror("send");
+        perror("put: send");
+        fclose(fp);
         exit(1);
     }
 
     if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
-        perror("recv");
+        perror("put: recv");
+        fclose(fp);
         exit(1);
     }
-    if (pkt.type != OK || pkt.code != 0x01) {
+    if (pkt.type != OK || pkt.code != 0x02) {
         print_error_message(pkt.type, pkt.code);
+        fclose(fp);
         return;
     }
 
+    pkt_data.type = DATA;
     while (1) {
-        if (recv(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
-            perror("recv");
-            exit(1);
-        }
-        if (fwrite(pkt_data.data, sizeof(char), pkt_data.length, fp) < pkt_data.length) {
-            perror("fwrite");
-            exit(1);
-        }
-        if (pkt_data.code == 0x00)
-            break;
-        else if (pkt_data.code == 0x01)
-            continue;
-        else {
-            fprintf(stderr, "Error: stor: Invalid code\n");
+        pkt_data.length = fread(pkt_data.data, sizeof(char), DATASIZE, fp);
+        if (pkt_data.length == DATASIZE) {
+            pkt_data.code = 0x01;
+            if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
+                perror("put: send");
+                fclose(fp);
+                exit(1);
+            }
+        } else {
+            pkt_data.code = 0x00;
+            if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
+                perror("put: send");
+                fclose(fp);
+                exit(1);
+            }
             break;
         }
     }
     fclose(fp);
-    return;
 }
 
 void help(void)

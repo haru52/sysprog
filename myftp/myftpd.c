@@ -169,18 +169,17 @@ void list(int sd1, struct myftph pkt)
 
 void retr(int sd1, struct myftph pkt)
 {
-    char path[DATASIZE];
+    char path[DATASIZE + 1];
     FILE *fp;
     struct myftph_data pkt_data;
 
     if (recv(sd1, path, DATASIZE, 0) < 0) {
-        perror("recv");
+        perror("retr: recv");
         return;
     }
     path[pkt.length] = '\0';
-
     if ((fp = fopen(path, "r")) == NULL) {
-        perror("fopen");
+        perror("retr: fopen");
         switch (errno) {
             case ENOENT:
                 pkt.type = FILE_ERR;
@@ -195,31 +194,30 @@ void retr(int sd1, struct myftph pkt)
                 pkt.code = 0x05;
         }
         if (send(sd1, &pkt, sizeof(pkt), 0) < 0)
-            perror("send");
+            perror("retr: send");
         return;
     }
-
     pkt.type = OK;
     pkt.code = 0x01;
+    pkt.length = 0;
     if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
-        perror("send");
+        perror("retr: send");
         return;
     }
-
     pkt_data.type = DATA;
     while (1) {
         pkt_data.length = fread(pkt_data.data, sizeof(char), DATASIZE, fp);
         if (pkt_data.length == DATASIZE) {
             pkt_data.code = 0x01;
             if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
-                perror("send");
+                perror("retr: send");
                 fclose(fp);
                 return;
             }
         } else {
             pkt_data.code = 0x00;
             if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0)
-                perror("send");
+                perror("retr: send");
             break;
         }
     }
@@ -228,36 +226,37 @@ void retr(int sd1, struct myftph pkt)
 
 void stor(int sd1, struct myftph pkt)
 {
-    char path[DATASIZE];
+    char path[DATASIZE + 1];
     FILE *fp;
     struct myftph_data pkt_data;
 
     if (recv(sd1, path, DATASIZE, 0) < 0) {
-        perror("recv");
-        exit(1);
-    }
-    path[pkt.length] = '\0';
-
-    if ((fp = fopen(path, "w")) == NULL) {
-        perror("fopen");
+        perror("stor: recv");
         return;
     }
 
+    path[pkt.length] = '\0';
+    if ((fp = fopen(path, "w")) == NULL) {
+        perror("store: fopen");
+        return;
+    }
     pkt.type = OK;
     pkt.code = 0x02;
+    pkt.length = 0;
     if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
-        perror("send");
+        perror("stor: send");
+        fclose(fp);
         return;
     }
 
     while (1) {
         if (recv(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
-            perror("recv");
-            exit(1);
+            perror("store: recv");
+            break;
         }
         if (fwrite(pkt_data.data, sizeof(char), pkt_data.length, fp) < pkt_data.length) {
-            perror("fwrite");
-            exit(1);
+            perror("store: fwrite");
+            break;
         }
         if (pkt_data.code == 0x00)
             break;
@@ -284,6 +283,13 @@ int main(int argc, char *argv[])
     if (argc != 1 && argc != 2) {
         fprintf(stderr, "Usage: ./myftpd [current directory (option)]\n");
         exit(1);
+    }
+
+    if (argc == 2) {
+        if (chdir(argv[1]) == -1) {
+            perror("chdir");
+            exit(1);
+        }
     }
 
     serv = PORT_NUM;
