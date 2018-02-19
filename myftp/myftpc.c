@@ -39,10 +39,12 @@ void quit(int sd) {
     pkt.type = QUIT;
     if (send(sd, &pkt, sizeof(pkt), 0) < 0) {
         perror("quit: send");
+        close(sd);
         exit(1);
     }
     if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
         perror("quit: recv");
+        close(sd);
         exit(1);
     }
     if (pkt.type == OK && pkt.code == 0x00) {
@@ -235,16 +237,16 @@ void put(int sd, char *path1, char *path2)
         exit(1);
     }
 
-    if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
-        perror("put: recv");
-        fclose(fp);
-        exit(1);
-    }
-    if (pkt.type != OK || pkt.code != 0x02) {
-        print_error_message(pkt.type, pkt.code);
-        fclose(fp);
-        return;
-    }
+    // if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
+    //     perror("put: recv");
+    //     fclose(fp);
+    //     exit(1);
+    // }
+    // if (pkt.type != OK || pkt.code != 0x02) {
+    //     print_error_message(pkt.type, pkt.code);
+    //     fclose(fp);
+    //     return;
+    // }
 
     pkt_data.type = DATA;
     while (1) {
@@ -277,6 +279,7 @@ void help(void)
 void getargv(char *command, char *av[], int *nargs)
 {
     char *p = command;
+
     *nargs = 0;
     while (*nargs <= AVSIZE) {
         if (*p == '\n') {
@@ -317,50 +320,52 @@ void ftp_proc(int sd)
         quit(sd);
     } else if (strcmp(av[0], "pwd") == 0) {
         if (nargs != 1) {
-            fprintf (stderr, "Error: Invalid argument\nUsage: pwd\n");
+            fprintf (stderr, "myftpc: pwd: Invalid argument\nUsage: pwd\n");
             return;
         }
         pwd(sd);
     } else if (strcmp(av[0], "cd") == 0) {
         if (nargs != 2) {
-            fprintf (stderr, "Error: Invalid argument\nUsage: cd [path]\n");
+            fprintf (stderr, "myftpc: cd: Invalid argument\nUsage: cd [path]\n");
             return;
         }
         cd(sd, av[1]);
     } else if (strcmp(av[0], "dir") == 0) {
         if (nargs != 1 && nargs != 2) {
-            fprintf (stderr, "Error: Invalid argument\nUsage: dir [path (option)]\n");
+            fprintf (stderr, "myftpc: dir: Invalid argument\nUsage: dir [path (option)]\n");
             return;
         }
         dir(sd, av[1], nargs);
     } else if (strcmp(av[0], "lpwd") == 0) {
         if (nargs != 1) {
-            fprintf (stderr, "Error: Invalid argument\nUsage: lpwd\n");
+            fprintf (stderr, "myftpc: lpwd: Invalid argument\nUsage: lpwd\n");
             return;
         }
         lpwd();
     } else if (strcmp(av[0], "lcd") == 0) {
         if (nargs != 2) {
-            fprintf (stderr, "Error: Invalid argument\nUsage: lcd [path]\n");
+            fprintf (stderr, "myftpc: lcd: Invalid argument\nUsage: lcd [path]\n");
             return;
         }
         lcd(av[1]);
     } else if (strcmp(av[0], "ldir") == 0) {
         if (nargs != 1 && nargs != 2) {
-            fprintf (stderr, "Error: Invalid argument\nUsage: ldir [path (option)]\n");
+            fprintf (stderr, "myftpc: ldir: Invalid argument\nUsage: ldir [path (option)]\n");
             return;
         }
         if (nargs == 1) {
             char path[PATHSIZE];
             memset(path, 0, PATHSIZE);
-            if (getcwd(path, PATHSIZE) == NULL)
+            if (getcwd(path, PATHSIZE) == NULL) {
                 perror("ldir");
+                return;
+            }
             ldir(path);
         } else
             ldir(av[1]);
     } else if (strcmp(av[0], "get") == 0) {
         if (nargs != 2 && nargs != 3) {
-            fprintf (stderr, "Error: Invalid argument\nUsage: get [path 1] [path 2 (option)]\n");
+            fprintf (stderr, "myftpc: get: Invalid argument\nUsage: get [path 1] [path 2 (option)]\n");
             return;
         }
         if (nargs == 2) {
@@ -371,7 +376,7 @@ void ftp_proc(int sd)
             get(sd, av[1], av[2]);
     } else if (strcmp(av[0], "put") == 0) {
         if (nargs != 2 && nargs != 3) {
-            fprintf (stderr, "Error: Invalid argument\nUsage: put [path 1] [path 2 (option)]\n");
+            fprintf (stderr, "myftpc: put: Invalid argument\nUsage: put [path 1] [path 2 (option)]\n");
             return;
         }
         if (nargs == 2) {
@@ -380,11 +385,10 @@ void ftp_proc(int sd)
             put(sd, av[1], path2);
         } else
             put(sd, av[1], av[2]);
-    } else if (strcmp(av[0], "help") == 0) {
+    } else if (strcmp(av[0], "help") == 0)
         help();
-    } else {
-        fprintf(stderr, "Error: Invalid command\n");
-    }
+    else
+        fprintf(stderr, "myftpc: command not found: %s\n", av[0]);
 }
 
 int main(int argc, char *argv[])
@@ -400,20 +404,16 @@ int main(int argc, char *argv[])
 
     host = argv[1];
     serv = PORT_NUM;
-
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_STREAM;
-
     if ((err = getaddrinfo(host, serv, &hints, &res)) < 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(err));
         exit(1);
     }
-
     if ((sd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
         perror("socket");
         exit(1);
     }
-
     if (connect(sd, res->ai_addr, res->ai_addrlen) < 0) {
         perror("connect");
         exit(1);

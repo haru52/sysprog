@@ -29,7 +29,7 @@ void quit(int sd1) {
     exit(0);
 }
 
-void pwd(int sd1, struct myftph pkt)
+void pwd(int sd1)
 {
     struct myftph_data pkt_data;
 
@@ -238,16 +238,16 @@ void stor(int sd1, struct myftph pkt)
     path[pkt.length] = '\0';
     if ((fp = fopen(path, "w")) == NULL) {
         perror("store: fopen");
-        return;
+        exit(1);
     }
-    pkt.type = OK;
-    pkt.code = 0x02;
-    pkt.length = 0;
-    if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
-        perror("stor: send");
-        fclose(fp);
-        return;
-    }
+    // pkt.type = OK;
+    // pkt.code = 0x02;
+    // pkt.length = 0;
+    // if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
+    //     perror("stor: send");
+    //     fclose(fp);
+    //     return;
+    // }
 
     while (1) {
         if (recv(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
@@ -327,18 +327,14 @@ int main(int argc, char *argv[])
             exit(1);
         } else if (pid == 0) {
             while (1) {
-                while (1) {
-                    if (recv(sd1, &pkt, sizeof(pkt), 0) < 0)
-                        perror("recv");
-                    else
-                        break;
-                }
+                if (recv(sd1, &pkt, sizeof(pkt), 0) < 0)
+                    perror("recv");
                 switch (pkt.type) {
                     case QUIT:
                         quit(sd1);
                         break;
                     case PWD:
-                        pwd(sd1, pkt);
+                        pwd(sd1);
                         break;
                     case CWD:
                         cwd(sd1, pkt);
