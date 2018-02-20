@@ -240,14 +240,14 @@ void stor(int sd1, struct myftph pkt)
         perror("store: fopen");
         exit(1);
     }
-    // pkt.type = OK;
-    // pkt.code = 0x02;
-    // pkt.length = 0;
-    // if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
-    //     perror("stor: send");
-    //     fclose(fp);
-    //     return;
-    // }
+    pkt.type = OK;
+    pkt.code = 0x02;
+    pkt.length = 0;
+    if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
+        perror("stor: send");
+        fclose(fp);
+        return;
+    }
 
     while (1) {
         if (recv(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {

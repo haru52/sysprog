@@ -237,16 +237,16 @@ void put(int sd, char *path1, char *path2)
         exit(1);
     }
 
-    // if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
-    //     perror("put: recv");
-    //     fclose(fp);
-    //     exit(1);
-    // }
-    // if (pkt.type != OK || pkt.code != 0x02) {
-    //     print_error_message(pkt.type, pkt.code);
-    //     fclose(fp);
-    //     return;
-    // }
+    if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
+        perror("put: recv");
+        fclose(fp);
+        exit(1);
+    }
+    if (pkt.type != OK || pkt.code != 0x02) {
+        print_error_message(pkt.type, pkt.code);
+        fclose(fp);
+        return;
+    }
 
     pkt_data.type = DATA;
     while (1) {
