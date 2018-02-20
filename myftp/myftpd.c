@@ -232,39 +232,61 @@ void stor(int sd1, struct myftph pkt)
 
     if (recv(sd1, path, DATASIZE, 0) < 0) {
         perror("stor: recv");
-        return;
+        exit(1);
     }
 
     path[pkt.length] = '\0';
     if ((fp = fopen(path, "w")) == NULL) {
         perror("store: fopen");
-        exit(1);
-    }
-    pkt.type = OK;
-    pkt.code = 0x02;
-    pkt.length = 0;
-    if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
-        perror("stor: send");
-        fclose(fp);
+        // Comment out because of unkown bugs
+        // switch (errno) {
+        //     case ENOENT:
+        //         pkt.type = FILE_ERR;
+        //         pkt.code = 0x00;
+        //         break;
+        //     case EACCES:
+        //         pkt.type = FILE_ERR;
+        //         pkt.code = 0x01;
+        //         break;
+        //     default:
+        //         pkt.type = UNKWN_ERR;
+        //         pkt.code = 0x05;
+        // }
+        // if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
+        //     perror("stor: send");
+        //     exit(1);
+        // }
         return;
     }
+    // Comment out because of unkown bugs
+    // pkt.type = OK;
+    // pkt.code = 0x02;
+    // pkt.length = 0;
+    // if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
+    //     perror("stor: send");
+    //     fclose(fp);
+    //     exit(1);
+    // }
 
     while (1) {
         if (recv(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
             perror("store: recv");
-            break;
+            fclose(fp);
+            exit(1);
         }
         if (fwrite(pkt_data.data, sizeof(char), pkt_data.length, fp) < pkt_data.length) {
             perror("store: fwrite");
-            break;
+            fclose(fp);
+            exit(1);
         }
-        if (pkt_data.code == 0x00)
-            break;
-        else if (pkt_data.code == 0x01)
+        if (pkt_data.code == 0x01)
             continue;
-        else {
-            fprintf(stderr, "Error: stor: Invalid code\n");
+        else if (pkt_data.code == 0x00)
             break;
+        else {
+            fprintf(stderr, "myftpd: stor: Invalid code\n");
+            fclose(fp);
+            exit(1);
         }
     }
     fclose(fp);

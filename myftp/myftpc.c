@@ -211,7 +211,7 @@ void get(int sd, char *path1, char *path2)
         else if (pkt_data.code == 0x01)
             continue;
         else {
-            fprintf(stderr, "Error: put: Invalid code\n");
+            fprintf(stderr, "myftpc: get: Invalid code\n");
             break;
         }
     }
@@ -226,7 +226,7 @@ void put(int sd, char *path1, char *path2)
 
     if ((fp = fopen(path1, "r")) == NULL) {
         perror("put: fopen");
-        exit(1);
+        return;
     }
     pkt_data.type = STOR;
     pkt_data.length = strlen(path2);
@@ -237,16 +237,17 @@ void put(int sd, char *path1, char *path2)
         exit(1);
     }
 
-    if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
-        perror("put: recv");
-        fclose(fp);
-        exit(1);
-    }
-    if (pkt.type != OK || pkt.code != 0x02) {
-        print_error_message(pkt.type, pkt.code);
-        fclose(fp);
-        return;
-    }
+    // Comment out because of unkown bugs
+    // if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
+    //     perror("put: recv");
+    //     fclose(fp);
+    //     exit(1);
+    // }
+    // if (pkt.type != OK || pkt.code != 0x02) {
+    //     print_error_message(pkt.type, pkt.code);
+    //     fclose(fp);
+    //     return;
+    // }
 
     pkt_data.type = DATA;
     while (1) {
