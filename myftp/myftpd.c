@@ -61,7 +61,7 @@ void cwd(int sd1, struct myftph pkt)
     }
     path[pkt.length + 1] = '\0';
     if (chdir(path) == -1) {
-        perror("cwd: chdir")
+        perror("cwd: chdir");
         switch (errno) {
             case ENOENT:
                 pkt.type = FILE_ERR;
