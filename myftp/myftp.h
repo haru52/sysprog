@@ -5,6 +5,7 @@
 #define COMMANDSIZE 128
 #define AVSIZE 4
 #define PATHSIZE 64
+#define FILE_NAME_SIZE 64
 #define PORT_NUM "50021"
 
 // myFTP packet types

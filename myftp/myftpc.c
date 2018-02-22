@@ -65,12 +65,14 @@ void pwd(int sd)
 
     pkt.type = PWD;
     if (send(sd, &pkt, sizeof(pkt), 0) < 0) {
-        perror("pwd");
-        return;
+        perror("pwd: send");
+        close(sd);
+        exit(1);
     }
     if (recv(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
-        perror("pwd");
-        return;
+        perror("pwd: recv");
+        close(sd);
+        exit(1);
     }
     if (pkt_data.type == OK && pkt_data.code == 0x00) {
         path = (char *) malloc(pkt_data.length + 1);
@@ -90,12 +92,14 @@ void cd(int sd, char *path)
     pkt_data.length = strlen(path);
     strcpy(pkt_data.data, path);
     if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
-        perror("cd");
-        return;
+        perror("cd: send");
+        close(sd);
+        exit(1);
     }
     if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
-        perror("cd");
-        return;
+        perror("cd: recv");
+        close(sd);
+        exit(1);
     }
     if (pkt.type != OK || pkt.code != 0x00)
         print_error_message(pkt.type, pkt.code);
@@ -114,12 +118,14 @@ void dir(int sd, char *path, int nargs)
         strcpy(pkt_data.data, path);
     }
     if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
-        perror("dir");
-        return;
+        perror("dir: send");
+        close(sd);
+        exit(1);
     }
     if (recv(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
-        perror("dir");
-        return;
+        perror("dir: recv");
+        close(sd);
+        exit(1);
     }
     if (pkt_data.type == OK && pkt_data.code == 0x00) {
         file_list = (char *) malloc(pkt_data.length + 1);
@@ -136,7 +142,7 @@ void lpwd(void)
 
     memset(path, 0, PATHSIZE);
     if (getcwd(path, PATHSIZE) == NULL) {
-        perror("lpwd");
+        perror("lpwd: getcwd");
         return;
     }
     printf("%s\n", path);
@@ -145,7 +151,7 @@ void lpwd(void)
 void lcd(char *path)
 {
     if (chdir(path) == -1)
-        perror("lcd");
+        perror("lcd: chdir");
 }
 
 void ldir(char *path)
@@ -155,7 +161,7 @@ void ldir(char *path)
     struct dirent *dp;
 
     if (stat(path, &st) == -1) {
-        perror("ldir");
+        perror("ldir: stat");
         return;
     }
     if (S_ISDIR(st.st_mode)) {
@@ -180,11 +186,13 @@ void get(int sd, char *path1, char *path2)
     strcpy(pkt_data.data, path1);
     if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
         perror("get: send");
+        close(sd);
         exit(1);
     }
 
     if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
-        perror("recv");
+        perror("get: recv");
+        close(sd);
         exit(1);
     }
     if (pkt.type != OK || pkt.code != 0x01) {
@@ -193,17 +201,20 @@ void get(int sd, char *path1, char *path2)
     }
 
     if ((fp = fopen(path2, "w")) == NULL) {
-        perror("fopen");
+        perror("get: fopen");
         exit(1);
     }
 
     while (1) {
         if (recv(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
-            perror("recv");
+            perror("get: recv");
+            fclose(fp);
+            close(sd);
             exit(1);
         }
         if (fwrite(pkt_data.data, sizeof(char), pkt_data.length, fp) < pkt_data.length) {
-            perror("fwrite");
+            perror("get: fwrite");
+            fclose(fp);
             exit(1);
         }
         if (pkt_data.code == 0x00)
@@ -234,6 +245,7 @@ void put(int sd, char *path1, char *path2)
     if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
         perror("put: send");
         fclose(fp);
+        close(sd);
         exit(1);
     }
 
@@ -241,6 +253,7 @@ void put(int sd, char *path1, char *path2)
     // if (recv(sd, &pkt, sizeof(pkt), 0) < 0) {
     //     perror("put: recv");
     //     fclose(fp);
+    //     close(sd);
     //     exit(1);
     // }
     // if (pkt.type != OK || pkt.code != 0x02) {
@@ -257,6 +270,7 @@ void put(int sd, char *path1, char *path2)
             if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
                 perror("put: send");
                 fclose(fp);
+                close(sd);
                 exit(1);
             }
         } else {
@@ -264,6 +278,7 @@ void put(int sd, char *path1, char *path2)
             if (send(sd, &pkt_data, sizeof(pkt_data), 0) < 0) {
                 perror("put: send");
                 fclose(fp);
+                close(sd);
                 exit(1);
             }
             break;
@@ -312,6 +327,7 @@ void ftp_proc(int sd)
     char command[COMMANDSIZE];
     char *av[AVSIZE];
     int nargs;
+    char path[PATHSIZE];
     char *path2;
 
     fgets(command, sizeof(command), stdin);
@@ -355,10 +371,9 @@ void ftp_proc(int sd)
             return;
         }
         if (nargs == 1) {
-            char path[PATHSIZE];
             memset(path, 0, PATHSIZE);
             if (getcwd(path, PATHSIZE) == NULL) {
-                perror("ldir");
+                perror("ldir: getcwd");
                 return;
             }
             ldir(path);

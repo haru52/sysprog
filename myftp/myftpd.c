@@ -22,8 +22,9 @@ void quit(int sd1) {
     pkt.type = OK;
     pkt.code = 0x00;
     if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
-        perror("send");
-        return;
+        perror("quit: send");
+        close(sd1);
+        exit(1);
     }
     close(sd1);
     exit(0);
@@ -34,7 +35,7 @@ void pwd(int sd1)
     struct myftph_data pkt_data;
 
     if (getcwd(pkt_data.data, DATASIZE) == NULL) {
-        perror("pwd");
+        perror("pwd: getcwd");
         pkt_data.type = UNKWN_ERR;
         pkt_data.code = 0x05;
     } else {
@@ -42,8 +43,11 @@ void pwd(int sd1)
         pkt_data.code = 0x00;
         pkt_data.length = strlen(pkt_data.data);
     }
-    if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0)
-        perror("pwd");
+    if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
+        perror("pwd: send");
+        close(sd1);
+        exit(1);
+    }
 }
 
 void cwd(int sd1, struct myftph pkt)
@@ -51,11 +55,13 @@ void cwd(int sd1, struct myftph pkt)
     char path[DATASIZE];
 
     if (recv(sd1, path, DATASIZE, 0) < 0) {
-        perror("cwd");
-        return;
+        perror("cwd: recv");
+        close(sd1);
+        exit(1);
     }
     path[pkt.length + 1] = '\0';
     if (chdir(path) == -1) {
+        perror("cwd: chdir")
         switch (errno) {
             case ENOENT:
                 pkt.type = FILE_ERR;
@@ -73,8 +79,11 @@ void cwd(int sd1, struct myftph pkt)
         pkt.type = OK;
         pkt.code = 0x00;
     }
-    if (send(sd1, &pkt, sizeof(pkt), 0) < 0)
-        perror("cwd");
+    if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
+        perror("cwd: send");
+        close(sd1);
+        exit(1);
+    }
 }
 
 void list(int sd1, struct myftph pkt)
@@ -84,15 +93,16 @@ void list(int sd1, struct myftph pkt)
     struct stat st;
     DIR *dir;
     struct dirent *dp;
-    char file_name[64];
+    char file_name[FILE_NAME_SIZE];
 
     if (recv(sd1, path, DATASIZE, 0) < 0) {
-        perror("list");
-        return;
+        perror("list: recv");
+        close(sd1);
+        exit(1);
     }
     if (pkt.length == 0) {
         if (getcwd(path, DATASIZE) == NULL) {
-            perror("list");
+            perror("list: getcwd");
             switch (errno) {
                 case ENOENT:
                     pkt_data.type = FILE_ERR;
@@ -107,8 +117,9 @@ void list(int sd1, struct myftph pkt)
                     pkt_data.code = 0x05;
             }
             if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
-                perror("list");
-                return;
+                perror("list: send");
+                close(sd1);
+                exit(1);
             }
             return;
         }
@@ -132,7 +143,8 @@ void list(int sd1, struct myftph pkt)
         }
         if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
             perror("list: send");
-            return;
+            close(sd1);
+            exit(1);
         }
         return;
     }
@@ -143,7 +155,8 @@ void list(int sd1, struct myftph pkt)
             pkt_data.code = 0x05;
             if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
                 perror("list: send");
-                return;
+                close(sd1);
+                exit(1);
             }
             return;
         }
@@ -162,8 +175,9 @@ void list(int sd1, struct myftph pkt)
     pkt_data.code = 0x00;
     pkt_data.length = strlen(pkt_data.data);
     if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
-        perror("pwd");
-        return;
+        perror("list: send");
+        close(sd1);
+        exit(1);
     }
 }
 
@@ -175,7 +189,8 @@ void retr(int sd1, struct myftph pkt)
 
     if (recv(sd1, path, DATASIZE, 0) < 0) {
         perror("retr: recv");
-        return;
+        close(sd1);
+        exit(1);
     }
     path[pkt.length] = '\0';
     if ((fp = fopen(path, "r")) == NULL) {
@@ -193,8 +208,11 @@ void retr(int sd1, struct myftph pkt)
                 pkt.type = UNKWN_ERR;
                 pkt.code = 0x05;
         }
-        if (send(sd1, &pkt, sizeof(pkt), 0) < 0)
+        if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
             perror("retr: send");
+            close(sd1);
+            exit(1);
+        }
         return;
     }
     pkt.type = OK;
@@ -202,7 +220,9 @@ void retr(int sd1, struct myftph pkt)
     pkt.length = 0;
     if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
         perror("retr: send");
-        return;
+        fclose(fp);
+        close(sd1);
+        exit(1);
     }
     pkt_data.type = DATA;
     while (1) {
@@ -212,12 +232,17 @@ void retr(int sd1, struct myftph pkt)
             if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
                 perror("retr: send");
                 fclose(fp);
-                return;
+                close(sd1);
+                exit(1);
             }
         } else {
             pkt_data.code = 0x00;
-            if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0)
+            if (send(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
                 perror("retr: send");
+                fclose(fp);
+                close(sd1);
+                exit(1);
+            }
             break;
         }
     }
@@ -232,6 +257,7 @@ void stor(int sd1, struct myftph pkt)
 
     if (recv(sd1, path, DATASIZE, 0) < 0) {
         perror("stor: recv");
+        close(sd1);
         exit(1);
     }
 
@@ -254,6 +280,7 @@ void stor(int sd1, struct myftph pkt)
         // }
         // if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
         //     perror("stor: send");
+        //     close(sd1);
         //     exit(1);
         // }
         return;
@@ -265,6 +292,7 @@ void stor(int sd1, struct myftph pkt)
     // if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
     //     perror("stor: send");
     //     fclose(fp);
+    //     close(sd1);
     //     exit(1);
     // }
 
@@ -272,6 +300,7 @@ void stor(int sd1, struct myftph pkt)
         if (recv(sd1, &pkt_data, sizeof(pkt_data), 0) < 0) {
             perror("store: recv");
             fclose(fp);
+            close(sd1);
             exit(1);
         }
         if (fwrite(pkt_data.data, sizeof(char), pkt_data.length, fp) < pkt_data.length) {
@@ -349,8 +378,11 @@ int main(int argc, char *argv[])
             exit(1);
         } else if (pid == 0) {
             while (1) {
-                if (recv(sd1, &pkt, sizeof(pkt), 0) < 0)
+                if (recv(sd1, &pkt, sizeof(pkt), 0) < 0) {
                     perror("recv");
+                    close(sd1);
+                    exit(1);
+                }
                 switch (pkt.type) {
                     case QUIT:
                         quit(sd1);
@@ -373,8 +405,11 @@ int main(int argc, char *argv[])
                     default:
                         pkt.type = CMD_ERR;
                         pkt.code = 0x02;
-                        if (send(sd1, &pkt, sizeof(pkt), 0) < 0)
+                        if (send(sd1, &pkt, sizeof(pkt), 0) < 0) {
                             perror("send");
+                            close(sd1);
+                            exit(1);
+                        }
                 }
             }
         } else
