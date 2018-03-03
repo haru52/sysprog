@@ -1,7 +1,7 @@
 # Dijkstra's Shortest Path First Algorithm
 
 ## Overview
-ダイクストラ法による最短経路探索アルゴリズムです．
+ダイクストラ法による最短経路探索アルゴリズム
 
 
 ## Description
